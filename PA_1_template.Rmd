@@ -1,0 +1,194 @@
+---
+title: "Week 2 Assignment"
+author: "pjsio"
+date: "Wednesday, June 10, 2015"
+output: html_document
+---
+
+Echo shows the code
+results = false hides the results of that code
+
+
+
+
+## Loading and Preprocessing the Data.
+1. Load the csv file to R:
+```{r, echo=TRUE, cache=TRUE}
+a <- read.csv('D://Dropbox/JHU/5_Reproducible/week2/repdata-data-activity/activity.csv',
+              header = TRUE) 
+```
+
+2. Use the 'group_by' and 'summarise' method in dplyr in order to group the data by day:
+```{r, echo=TRUE}
+library(dplyr)
+bydate <- group_by(a, date)
+byday <- summarise(bydate, steps_t = sum(steps, na.rm=T), # total number of steps taken by day 
+                   step_avg = mean(steps, na.rm=T),       # average steps taken by day
+                   step_med = median(steps, na.rm=T),     # median steps taken by day
+                   step_min = min(steps, na.rm=T),        # minimum steps taken by day
+                   step_max = max(steps, na.rm=T))        # maximum steps taken by day
+byday
+```
+
+
+
+
+
+
+## What is the mean total number of steps taken per day?
+For this part of the assignment, I ignore the missing values in the dataset.
+
+1. Total number of steps taken per day can be displayed through steps_t:
+```{r, echo=TRUE}
+byday$steps_t
+```
+
+2. The difference between a histogram and a barplot is that while both show the frequency of a variable, histograms usually deal with continuous variables (that are cut off at set intervals). Barplots, on the other hand, use discrete variables. The following is a histogram of the total number of steps taken each day.
+
+```{r, echo=TRUE}
+hist(byday$steps_t, xlab='Steps taken per day', main = 'Daily Total Step Histogram')
+```
+
+3. The mean and median of the total number of steps taken per day are as follows:
+```{r, echo=TRUE}
+## Mean
+mean(byday$steps_t)
+## Median
+median(byday$steps_t)
+```
+
+
+
+
+
+## What is the average daily activity pattern?
+
+Since we want to look into the step data organized by time interval (during the day), we 'group_by' the original data by the 5 second intervals (a$interval):
+```{r, echo=TRUE}
+byinterval <- group_by(a, interval)
+byinter <- summarise(byinterval, steps_tav = mean(steps, na.rm=T),
+                     maxstep_intv = max(steps, na.rm=T))
+byinterval <- mutate(byinterval, steps_tav = mean(steps, na.rm=T))
+
+```
+
+1. A time series plot (i.e. type = "l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all days (y-axis):
+
+```{r, echo=TRUE}
+plot(byinter$interval, byinter$steps_tav, type= 'l', ylab = 'steps', xlab = 'Interval during a Day', main='Steps Organized by Interval')
+
+```
+
+2. The 5-minute interval, on average across all the days in the dataset, that contains the maximum number of steps is as follows:
+```{r, echo=TRUE}
+filter(byinter, byinter$steps==max(byinter$steps)) ## the filter method in dplyr searches for
+                                                   ## the interval which matches the maximum step-value
+```
+
+
+
+
+
+
+
+
+## Imputing missing values
+
+Note that there are a number of days/intervals where there are missing values (coded as NA). The presence of missing days may introduce bias into some calculations or summaries of the data.
+
+1. The total number of missing values in the dataset (i.e. the total number of rows with NAs):
+```{r, echo=TRUE}
+length(a$steps[a$steps == NA])
+
+```
+
+2. My strategy to filling in all of the missing values in the dataset is to use the mean for that 5-minute interval:
+3. The following code fills in the missing values:
+
+```{r, echo=TRUE}
+newframe <- a
+newframe$steps[is.na(a$steps)] <- byinterval$steps_tav[is.na(a$steps)] ## 1. Find the Missing Values
+                                                                ## 2. Assign the interval-averages to those missing values
+```
+
+4. See the histogram of the total number of steps taken each day:
+
+```{r, echo=TRUE}
+new_bydate <- group_by(newframe, date)
+new_byday <- summarise(new_bydate, steps_t = sum(steps, na.rm=T)) # total number of steps taken by day
+hist(new_byday$steps_t, main = 'Steps Organized by Interval- NEW', xlab='Interval during a Day')
+```
+
+
+The mean and median total number of steps taken per day are as follows:
+```{r, echo=TRUE}
+mean(new_byday$steps_t) ## new mean
+median(new_byday$steps_t) ## new median
+```
+The Mean and median have both increased. Imputing missing data on the estimates of total daily number of steps has 'smoothed out' the origianl distribution (the relative distribution of step value has become more 'bell-shaped' around the mean). The tail value frequencies have decreased, while the center has bulged.
+This is reminiscent, but not exactly related to the law of large numbers we encounter in Dr. Caffo's course in the specialization.
+
+
+
+
+
+
+## Are there differences in activity patterns between weekdays and weekends?
+
+```{r}
+Sys.setlocale("LC_TIME","eng")
+```
+
+
+
+I create a new factor variable in the dataset with two levels Weekday and Weekend indicating whether a given date is a weekday or weekend day:
+```{r}
+
+daydata <- weekdays(as.POSIXct(newframe$date, tz='UTC'))
+x<-c()
+for (f in daydata) {
+  if (f=='Saturday'|f=='Sunday'){
+    x <- append(x, 'weekend')
+  }
+  else{
+    x <- append(x, 'weekday')
+  }
+}
+x <- as.factor(x)
+newframe$TGIF <- x
+
+
+```
+I have created a panel plot containing a time series plot (i.e. type = "l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all weekday days or weekend days (y-axis).
+
+```{r, echo=TRUE}
+weekday_f <- newframe[newframe$TGIF == 'weekday', ]
+weekday_f_n <- group_by(weekday_f, interval)
+weekday_f_n <- summarise(weekday_f_n, steps_tav = mean(steps, na.rm=T))
+
+weekend_f <- newframe[newframe$TGIF == 'weekend', ]
+weekend_f_n <- group_by(weekend_f, interval)
+weekend_f_n <- summarise(weekend_f_n, steps_tav = mean(steps, na.rm=T))
+
+par(mar = c(4,4,1,1), mfrow= c(2,1)) 
+plot(weekday_f_n$interval, weekday_f_n$steps_tav, type = 'l', col = 'blue', ylim=c(0,250), xlab='Weekdays', ylab='steps')
+plot(weekend_f_n$interval, weekend_f_n$steps_tav, type = 'l', col = 'red', ylim=c(0,250), xlab ='Weekends', ylab='steps')
+
+```
+
+
+
+The same plotting can be done with ggplot as well:
+```{r, echo=TRUE}
+library(ggplot2)
+
+qplot(interval, steps_tav, data = weekday_f_n, geom = c('line', 'smooth'), xlab = 'Weekday', ylim=c(0,250))
+qplot(interval, steps_tav, data = weekend_f_n, geom = c('line', 'smooth'), xlab='Weekend', ylim = (c(0,250)))
+```
+
+
+From the plots, we can find an interesting (and somewhat intuitive) observation:
+1. Weekdays, compared to weekends, tend to have more workouts during the morning (presumably before work)
+2. Weekends, compared to weekdays, tend to display a more evenly spread out workout routine throughout the day.
+
+This may imply that the anonymized subject is occupied during the weekdays (presumably by full or part time employment).
